@@ -86,6 +86,19 @@ window.UIController = (function () {
     });
   }
 
+  function setCountySelection(countyName) {
+    const countyRadio = document.querySelector('input[name="clipMode"][value="county"]');
+    if (countyRadio) countyRadio.checked = true;
+    if (elements.countySelectWrap) elements.countySelectWrap.style.display = "flex";
+    if (elements.muniSelectWrap) elements.muniSelectWrap.style.display = "none";
+    if (elements.resetClipBtn) elements.resetClipBtn.style.display = "inline-flex";
+    if (elements.countySelect) elements.countySelect.value = countyName;
+    if (elements.clipBadge) {
+      elements.clipBadge.style.display = "inline-flex";
+      elements.clipBadge.textContent = `Clipped: ${countyName} Co.`;
+    }
+  }
+
   function bindEvents({
     onLayerToggle,
     onLayerOpacity,
@@ -169,8 +182,7 @@ window.UIController = (function () {
     elements.countySelect?.addEventListener("change", (e) => {
       const county = e.target.value;
       if (county) {
-        elements.clipBadge.style.display = "inline-flex";
-        elements.clipBadge.textContent = `Clipped: ${county} Co.`;
+        setCountySelection(county);
         onCountySelected(county);
       } else {
         elements.clipBadge.style.display = "none";
@@ -237,6 +249,7 @@ window.UIController = (function () {
     },
     populateCountySelect,
     populateMuniSelect,
+    setCountySelection,
     updateStatusBadge,
     bindLoadingIndicator
   };

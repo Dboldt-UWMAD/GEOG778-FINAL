@@ -5,9 +5,9 @@
 
 window.AppConfig = Object.freeze({
   map: {
-    initialCenter: [-89.5, 44.5], // Geographic Center of Wisconsin
-    initialZoom: 7,
-    minZoom: 5,
+    initialCenter: [-90.4, 43.1], // Focused on the 5-county region (Grant, Green, Iowa, Lafayette, Richland)
+    initialZoom: 9,
+    minZoom: 6,
     maxZoom: 20,
     defaultBasemap: "topo-vector"
   },
@@ -24,9 +24,9 @@ window.AppConfig = Object.freeze({
           {
             type: "fields",
             fieldInfos: [
+              { fieldName: "CONAME", label: "County" },
               { fieldName: "OWNERNME1", label: "Owner Name" },
               { fieldName: "SITEADRESS", label: "Site Address" },
-              { fieldName: "CONAME", label: "County" },
               { fieldName: "mailing_state", label: "Owner Mailing State" },
               { fieldName: "PSTLADRESS", label: "Mailing Address" },
               {
@@ -101,6 +101,13 @@ window.AppConfig = Object.freeze({
               { fieldName: "lsad_trans", label: "Jurisdiction" },
               { fieldName: "state", label: "State" }
             ]
+          }
+        ],
+        actions: [
+          {
+            id: "filter-to-county",
+            title: "Filter parcels to this County",
+            className: "esri-icon-filter"
           }
         ]
       }

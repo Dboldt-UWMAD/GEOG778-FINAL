@@ -1,14 +1,13 @@
 /**
  * Spatial Clip & Filter Service
- * Restricts parcel boundaries exclusively to target counties: Grant, Green, Iowa, Lafayette, and Richland,
- * as well as incorporated municipalities intersecting those regions.
+ * Restricts parcel boundaries directly by the county field "CONAME" on the parcel layer
+ * (Grant, Green, Iowa, Lafayette, Richland), with map click selection and polygon highlighting.
  */
 
 window.FilterService = (function () {
   let graphicsLayer = null;
-  let activeMaskPolygon = null;
 
-  // The 5 requested southwestern Wisconsin target counties
+  // Exact 5 counties present in the Wisconsin Statewide Parcel by State Ownership dataset
   const ALLOWED_COUNTIES = Object.freeze([
     "Grant",
     "Green",
@@ -73,102 +72,123 @@ window.FilterService = (function () {
   }
 
   /**
-   * Clip parcel layer to a selected County
+   * Filter the parcel layer to ONLY show parcels in the selected county
+   * uses the CONAME (County Name) attribute on the parcel layer: CONAME = 'GRANT', etc.
    */
   async function clipToCounty(countyName, view, parcelLayer, Graphic, Polygon) {
     if (!countyName) {
-      clearClip(parcelLayer);
+      await clearClip(parcelLayer, view);
       return;
     }
 
-    // Validate that the requested county is one of the allowed 5
-    if (!ALLOWED_COUNTIES.includes(countyName)) {
-      console.warn(`County ${countyName} is outside the allowed list.`);
+    const matchedCounty = ALLOWED_COUNTIES.find(
+      (c) => c.toLowerCase() === countyName.trim().toLowerCase()
+    );
+
+    if (!matchedCounty) {
+      console.warn(`County ${countyName} is not one of the 5 supported counties.`);
       return;
     }
 
-    // 1. Query county geometry (using WTM SR 3071 matching parcel layer)
-    const url = "https://services7.arcgis.com/Tk0IbKIKhaoYn5sa/arcgis/rest/services/WisconsinCountyBoundary/FeatureServer/0/query";
-    const params = new URLSearchParams({
-      where: `name = '${countyName.replace(/'/g, "''")}'`,
-      outFields: "name",
-      returnGeometry: "true",
-      outSR: "3071",
-      f: "pjson"
-    });
+    // 1. Direct attribute filter on the parcel layer using CONAME (all uppercase in the database)
+    const upperCounty = matchedCounty.toUpperCase();
+    parcelLayer.definitionExpression = `CONAME = '${upperCounty}'`;
 
-    const res = await fetch(`${url}?${params.toString()}`);
-    const data = await res.json();
-    const feat = data.features?.[0];
-
-    if (!feat || !feat.geometry) {
-      throw new Error("Could not retrieve boundary geometry for " + countyName);
+    // Clear any previous layerView client filter
+    try {
+      const layerView = await view.whenLayerView(parcelLayer);
+      layerView.filter = null;
+    } catch {
+      // ignore
     }
 
-    const polygon = new Polygon({
-      rings: feat.geometry.rings,
-      spatialReference: { wkid: 3071 }
-    });
+    // 2. Query and highlight the county boundary polygon
+    try {
+      const url = "https://services7.arcgis.com/Tk0IbKIKhaoYn5sa/arcgis/rest/services/WisconsinCountyBoundary/FeatureServer/0/query";
+      const params = new URLSearchParams({
+        where: `name = '${matchedCounty}'`,
+        outFields: "name",
+        returnGeometry: "true",
+        outSR: "3071",
+        f: "pjson"
+      });
 
-    // 2. Apply server-side spatial & attribute filter to parcels
-    applyFilter(parcelLayer, polygon, `UPPER(CONAME) = '${countyName.toUpperCase().replace(/'/g, "''")}'`);
+      const res = await fetch(`${url}?${params.toString()}`);
+      const data = await res.json();
+      const feat = data.features?.[0];
 
-    // 3. Render boundary highlight & zoom
-    highlightBoundary(polygon, Graphic);
-    await view.goTo(polygon.extent.expand(1.15), { duration: 900 });
+      if (feat && feat.geometry) {
+        const polygon = new Polygon({
+          rings: feat.geometry.rings,
+          spatialReference: { wkid: 3071 }
+        });
+
+        highlightBoundary(polygon, Graphic);
+        await view.goTo(polygon.extent.expand(1.15), { duration: 900 });
+        return;
+      }
+    } catch (err) {
+      console.warn("Could not retrieve boundary graphic:", err);
+    }
+
+    // Fallback: zoom to parcel extent matching the definitionExpression
+    try {
+      const extentResult = await parcelLayer.queryExtent();
+      if (extentResult && extentResult.extent) {
+        await view.goTo(extentResult.extent.expand(1.15), { duration: 900 });
+      }
+    } catch {
+      // Ignore extent error
+    }
   }
 
   /**
-   * Clip parcel layer to a selected Municipality
+   * Filter the parcel layer to a selected Municipality
    */
   async function clipToMunicipality(objectId, view, parcelLayer, Graphic, Polygon) {
     if (!objectId) {
-      clearClip(parcelLayer);
+      await clearClip(parcelLayer, view);
       return;
     }
 
-    const url = "https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_Municipality_Boundary_WTM_Ext/MapServer/0/query";
-    const params = new URLSearchParams({
-      where: `OBJECTID = ${objectId}`,
-      outFields: "OBJECTID,MCD_NAME,MCD_LOWERCASE_NAME",
-      returnGeometry: "true",
-      outSR: "3071",
-      f: "pjson"
-    });
+    try {
+      const url = "https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_Municipality_Boundary_WTM_Ext/MapServer/0/query";
+      const params = new URLSearchParams({
+        where: `OBJECTID = ${objectId}`,
+        outFields: "OBJECTID,MCD_NAME,MCD_LOWERCASE_NAME",
+        returnGeometry: "true",
+        outSR: "3071",
+        f: "pjson"
+      });
 
-    const res = await fetch(`${url}?${params.toString()}`);
-    const data = await res.json();
-    const feat = data.features?.[0];
+      const res = await fetch(`${url}?${params.toString()}`);
+      const data = await res.json();
+      const feat = data.features?.[0];
 
-    if (!feat || !feat.geometry) {
-      throw new Error("Could not retrieve municipality geometry");
+      if (!feat || !feat.geometry) {
+        throw new Error("Could not retrieve municipality geometry");
+      }
+
+      const polygon = new Polygon({
+        rings: feat.geometry.rings,
+        spatialReference: { wkid: 3071 }
+      });
+
+      // Filter via FeatureLayerView spatial filter so only parcels inside this municipality render
+      const layerView = await view.whenLayerView(parcelLayer);
+      layerView.filter = {
+        geometry: polygon,
+        spatialRelationship: "intersects"
+      };
+
+      // Reset definition expression so it considers all parcels across the region
+      parcelLayer.definitionExpression = null;
+
+      highlightBoundary(polygon, Graphic);
+      await view.goTo(polygon.extent.expand(1.15), { duration: 900 });
+    } catch (err) {
+      console.error("Municipality clip error:", err);
     }
-
-    const polygon = new Polygon({
-      rings: feat.geometry.rings,
-      spatialReference: { wkid: 3071 }
-    });
-
-    // Apply spatial filter using geometry
-    applyFilter(parcelLayer, polygon, null);
-
-    // Highlight and zoom
-    highlightBoundary(polygon, Graphic);
-    await view.goTo(polygon.extent.expand(1.15), { duration: 900 });
-  }
-
-  function applyFilter(parcelLayer, polygon, whereClause) {
-    activeMaskPolygon = polygon;
-    const filterConfig = {
-      geometry: polygon,
-      spatialRelationship: "intersects"
-    };
-
-    if (whereClause) {
-      filterConfig.where = whereClause;
-    }
-
-    parcelLayer.filter = filterConfig;
   }
 
   function highlightBoundary(polygon, Graphic) {
@@ -191,11 +211,17 @@ window.FilterService = (function () {
     graphicsLayer.add(graphic);
   }
 
-  function clearClip(parcelLayer) {
-    activeMaskPolygon = null;
+  async function clearClip(parcelLayer, view) {
     if (parcelLayer) {
-      parcelLayer.filter = null;
       parcelLayer.definitionExpression = null;
+      if (view) {
+        try {
+          const layerView = await view.whenLayerView(parcelLayer);
+          layerView.filter = null;
+        } catch {
+          // ignore
+        }
+      }
     }
     if (graphicsLayer) {
       graphicsLayer.removeAll();
@@ -204,6 +230,7 @@ window.FilterService = (function () {
 
   return {
     init,
+    ALLOWED_COUNTIES,
     loadCounties,
     loadMunicipalities,
     clipToCounty,

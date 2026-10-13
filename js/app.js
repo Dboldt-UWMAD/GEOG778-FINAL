@@ -16,7 +16,8 @@
     "esri/widgets/Home",
     "esri/widgets/ScaleBar",
     "esri/widgets/Search",
-    "esri/widgets/Fullscreen"
+    "esri/widgets/Fullscreen",
+    "esri/core/reactiveUtils"
   ], function (
     Map,
     MapView,
@@ -29,7 +30,8 @@
     Home,
     ScaleBar,
     Search,
-    Fullscreen
+    Fullscreen,
+    reactiveUtils
   ) {
     const config = window.AppConfig;
     const layerService = window.LayerService;
@@ -118,7 +120,7 @@
         }
       },
       onResetClip() {
-        filterService.clearClip(parcelLayer);
+        filterService.clearClip(parcelLayer, view);
       }
     });
 
@@ -131,7 +133,23 @@
       uiController.populateMuniSelect(munis);
     }).catch((err) => console.warn("Failed to load municipalities list:", err));
 
-    // 7. Connect Async Data Loading Feedback
+    // 7. Handle Popup Action: "Filter parcels to this County"
+    reactiveUtils.on(
+      () => view.popup,
+      "trigger-action",
+      async (event) => {
+        if (event.action.id === "filter-to-county") {
+          const selectedFeature = view.popup.selectedFeature;
+          const countyName = selectedFeature?.attributes?.name;
+          if (countyName && filterService.ALLOWED_COUNTIES.includes(countyName)) {
+            uiController.setCountySelection(countyName);
+            await filterService.clipToCounty(countyName, view, parcelLayer, Graphic, Polygon);
+          }
+        }
+      }
+    );
+
+    // 8. Connect Async Data Loading Feedback
     view.whenLayerView(parcelLayer).then((layerView) => {
       uiController.bindLoadingIndicator(layerView);
     });
