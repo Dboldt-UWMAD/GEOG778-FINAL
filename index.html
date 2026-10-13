@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Wisconsin Land & Boundary Explorer | ArcGIS</title>
+
+  <!-- Typography & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- ArcGIS Maps SDK for JavaScript -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.31/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.31/"></script>
+
+  <!-- Modular Stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Fullscreen Interactive Map Canvas -->
+  <div id="viewDiv" role="region" aria-label="ArcGIS Interactive Map"></div>
+
+  <!-- Top Floating Glass Header -->
+  <header class="app-header" role="banner">
+    <div class="brand-icon" aria-hidden="true">
+      <i class="fa-solid fa-map-location-dot"></i>
+    </div>
+    <div class="brand-titles">
+      <h1>Wisconsin Land &amp; Boundary Explorer</h1>
+      <p>Parcels • Municipalities • County Boundaries</p>
+    </div>
+    <div id="layerBadge" class="status-pill" aria-live="polite">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span id="layerBadgeText">3/3 Layers Visible</span>
+    </div>
+  </header>
+
+  <!-- Floating Modular Control Panel -->
+  <aside id="mainPanel" class="panel-widget" aria-label="Map Control Panel">
+    <div class="panel-header" id="panelHeaderToggle" role="button" tabindex="0" title="Click to collapse / expand">
+      <div class="panel-title">
+        <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+        <span>Map Controls</span>
+      </div>
+      <button class="btn-icon-subtle" title="Toggle panel height" aria-label="Toggle panel height">
+        <i id="collapseIcon" class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <!-- Segmented Navigation Tabs -->
+    <nav class="tab-nav" role="tablist">
+      <button class="tab-nav-btn active" role="tab" aria-selected="true" data-tab="tab-layers">
+        <i class="fa-solid fa-layer-group" aria-hidden="true"></i> Layer Menu
+      </button>
+      <button class="tab-nav-btn" role="tab" aria-selected="false" data-tab="tab-legend">
+        <i class="fa-solid fa-list-ul" aria-hidden="true"></i> Legend
+      </button>
+      <button class="tab-nav-btn" role="tab" aria-selected="false" data-tab="tab-details">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i> Details
+      </button>
+    </nav>
+
+    <!-- Tab 1: Layer Controls -->
+    <div id="tab-layers" class="panel-body tab-page" role="tabpanel">
+      <!-- Layer 1: Parcels -->
+      <section class="surface-card">
+        <div class="layer-header-row">
+          <div class="layer-meta">
+            <div class="layer-icon-badge badge-parcels" aria-hidden="true">
+              <i class="fa-solid fa-vector-square"></i>
+            </div>
+            <div>
+              <div class="layer-title-text">Parcel Ownership</div>
+              <div class="layer-subtext">By Owner Mailing State</div>
+            </div>
+          </div>
+          <label class="toggle-switch" title="Toggle Parcels Visibility">
+            <input type="checkbox" id="parcelToggle" checked aria-label="Toggle Parcel Layer" />
+            <span class="switch-rail"></span>
+          </label>
+        </div>
+
+        <div class="control-slider-group">
+          <div class="slider-meta">
+            <span>Opacity</span>
+            <span id="parcelOpacityLabel">90%</span>
+          </div>
+          <input type="range" id="parcelOpacitySlider" class="slider-input" min="0" max="100" value="90" aria-label="Parcel Layer Opacity" />
+        </div>
+
+        <button id="zoomExtentBtn" class="btn-action" title="Zoom to parcel bounds">
+          <i class="fa-solid fa-expand" aria-hidden="true"></i> Zoom to Parcel Extent
+        </button>
+      </section>
+
+      <!-- Layer 2: Municipalities -->
+      <section class="surface-card">
+        <div class="layer-header-row">
+          <div class="layer-meta">
+            <div class="layer-icon-badge badge-munis" aria-hidden="true">
+              <i class="fa-solid fa-city"></i>
+            </div>
+            <div>
+              <div class="layer-title-text">Municipality Boundary</div>
+              <div class="layer-subtext">WI DNR Map Service</div>
+            </div>
+          </div>
+          <label class="toggle-switch" title="Toggle Municipalities Visibility">
+            <input type="checkbox" id="muniToggle" checked aria-label="Toggle Municipality Boundaries" />
+            <span class="switch-rail"></span>
+          </label>
+        </div>
+
+        <div class="control-slider-group">
+          <div class="slider-meta">
+            <span>Opacity</span>
+            <span id="muniOpacityLabel">85%</span>
+          </div>
+          <input type="range" id="muniOpacitySlider" class="slider-input" min="0" max="100" value="85" aria-label="Municipality Opacity" />
+        </div>
+      </section>
+
+      <!-- Layer 3: Counties -->
+      <section class="surface-card">
+        <div class="layer-header-row">
+          <div class="layer-meta">
+            <div class="layer-icon-badge badge-counties" aria-hidden="true">
+              <i class="fa-solid fa-draw-polygon"></i>
+            </div>
+            <div>
+              <div class="layer-title-text">County Boundaries</div>
+              <div class="layer-subtext">WI 72 County Polygons</div>
+            </div>
+          </div>
+          <label class="toggle-switch" title="Toggle Counties Visibility">
+            <input type="checkbox" id="countyToggle" checked aria-label="Toggle County Boundaries" />
+            <span class="switch-rail"></span>
+          </label>
+        </div>
+
+        <div class="control-slider-group">
+          <div class="slider-meta">
+            <span>Opacity</span>
+            <span id="countyOpacityLabel">70%</span>
+          </div>
+          <input type="range" id="countyOpacitySlider" class="slider-input" min="0" max="100" value="70" aria-label="County Opacity" />
+        </div>
+      </section>
+
+      <!-- Basemap Switcher -->
+      <section class="surface-card">
+        <div class="layer-title-text" style="display: flex; align-items: center; gap: 6px;">
+          <i class="fa-solid fa-earth-americas" style="color: var(--color-primary);" aria-hidden="true"></i> Basemap
+        </div>
+        <div class="basemap-grid">
+          <button class="basemap-card active" data-bm="topo-vector">
+            <i class="fa-solid fa-mountain-sun" aria-hidden="true"></i> Topo
+          </button>
+          <button class="basemap-card" data-bm="dark-gray-vector">
+            <i class="fa-solid fa-moon" aria-hidden="true"></i> Dark Gray
+          </button>
+          <button class="basemap-card" data-bm="hybrid">
+            <i class="fa-solid fa-satellite" aria-hidden="true"></i> Imagery
+          </button>
+          <button class="basemap-card" data-bm="streets-navigation-vector">
+            <i class="fa-solid fa-road" aria-hidden="true"></i> Streets
+          </button>
+        </div>
+      </section>
+
+      <div class="callout-box">
+        <i class="fa-solid fa-lightbulb" style="color: #eab308; margin-right: 4px;" aria-hidden="true"></i>
+        Click on any parcel, municipality, or county on the map to inspect ownership, assessment, and geographic metadata.
+      </div>
+    </div>
+
+    <!-- Tab 2: Symbology Legend -->
+    <div id="tab-legend" class="panel-body tab-page" role="tabpanel" style="display: none;">
+      <section class="surface-card" style="padding: 12px;">
+        <div class="layer-title-text" style="margin-bottom: 8px;">
+          Dynamic Map Symbology
+        </div>
+        <div id="legendDiv"></div>
+      </section>
+      <div class="callout-box">
+        Symbology reflects current visibility states and scale thresholds.
+      </div>
+    </div>
+
+    <!-- Tab 3: Service Metadata Details -->
+    <div id="tab-details" class="panel-body tab-page" role="tabpanel" style="display: none;">
+      <section class="surface-card">
+        <div class="layer-title-text">Integrated Services</div>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
+          <div>
+            <strong style="font-size: 0.8rem;">1. Parcels by State Ownership (V12)</strong>
+            <p style="font-size: 0.74rem; color: var(--color-text-muted);">State Cartographer's Office &amp; WLIP DOA</p>
+            <a class="service-link" href="https://services.arcgis.com/HRPe58bUyBqyyiCt/arcgis/rest/services/Parcel_by_State_Ownership/FeatureServer" target="_blank" rel="noopener">
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> REST FeatureServer
+            </a>
+          </div>
+
+          <div class="card-divider"></div>
+
+          <div>
+            <strong style="font-size: 0.8rem;">2. Municipality Boundaries</strong>
+            <p style="font-size: 0.74rem; color: var(--color-text-muted);">Wisconsin Department of Natural Resources</p>
+            <a class="service-link" href="https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_Municipality_Boundary_WTM_Ext/MapServer" target="_blank" rel="noopener">
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> REST MapServer
+            </a>
+          </div>
+
+          <div class="card-divider"></div>
+
+          <div>
+            <strong style="font-size: 0.8rem;">3. Wisconsin County Boundaries</strong>
+            <p style="font-size: 0.74rem; color: var(--color-text-muted);">Census TIGER/Line County Extents</p>
+            <a class="service-link" href="https://services7.arcgis.com/Tk0IbKIKhaoYn5sa/arcgis/rest/services/WisconsinCountyBoundary/FeatureServer" target="_blank" rel="noopener">
+              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> REST FeatureServer
+            </a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- Live Loading Indicator -->
+  <div id="loadingIndicator" class="loading-pill" role="status" aria-live="polite">
+    <div class="spinner-icon" aria-hidden="true"></div>
+    <span>Rendering parcels...</span>
+  </div>
+
+  <!-- Modular Scripts Architecture -->
+  <script src="js/config.js"></script>
+  <script src="js/layers.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
