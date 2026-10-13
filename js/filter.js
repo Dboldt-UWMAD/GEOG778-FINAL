@@ -1,11 +1,21 @@
 /**
  * Spatial Clip & Filter Service
- * Provides boundary selection, geometry queries, and server-side parcel clipping.
+ * Restricts parcel boundaries exclusively to target counties: Grant, Green, Iowa, Lafayette, and Richland,
+ * as well as incorporated municipalities intersecting those regions.
  */
 
 window.FilterService = (function () {
   let graphicsLayer = null;
   let activeMaskPolygon = null;
+
+  // The 5 requested southwestern Wisconsin target counties
+  const ALLOWED_COUNTIES = Object.freeze([
+    "Grant",
+    "Green",
+    "Iowa",
+    "Lafayette",
+    "Richland"
+  ]);
 
   function init(GraphicsLayer, map) {
     graphicsLayer = new GraphicsLayer({
@@ -16,40 +26,28 @@ window.FilterService = (function () {
   }
 
   /**
-   * Fetch distinct counties from WisconsinCountyBoundary
+   * Return the strict list of target counties
    */
   async function loadCounties() {
-    const url = "https://services7.arcgis.com/Tk0IbKIKhaoYn5sa/arcgis/rest/services/WisconsinCountyBoundary/FeatureServer/0/query";
-    const params = new URLSearchParams({
-      where: "1=1",
-      outFields: "name",
-      returnGeometry: "false",
-      orderByFields: "name ASC",
-      f: "pjson"
-    });
-
-    const res = await fetch(`${url}?${params.toString()}`);
-    const data = await res.json();
-    const seen = new Set();
-    const list = [];
-
-    (data.features || []).forEach((f) => {
-      const name = f.attributes?.name;
-      if (name && !seen.has(name)) {
-        seen.add(name);
-        list.push(name);
-      }
-    });
-
-    return list.sort((a, b) => a.localeCompare(b));
+    return [...ALLOWED_COUNTIES];
   }
 
   /**
-   * Fetch distinct municipalities from DNR Municipality Boundaries
+   * Fetch distinct municipalities within the 5 target counties' bounding extent
    */
   async function loadMunicipalities() {
     const url = "https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_Municipality_Boundary_WTM_Ext/MapServer/0/query";
     const params = new URLSearchParams({
+      geometry: JSON.stringify({
+        xmin: 426762,
+        ymin: 225497,
+        xmax: 572107,
+        ymax: 342460,
+        spatialReference: { wkid: 3071 }
+      }),
+      geometryType: "esriGeometryEnvelope",
+      spatialRel: "esriSpatialRelIntersects",
+      inSR: "3071",
       where: "MCD_TYPE_CODE in ('C','V')",
       outFields: "OBJECTID,MCD_NAME,MCD_LOWERCASE_NAME,MCD_TYPE_CODE",
       returnGeometry: "false",
@@ -83,6 +81,12 @@ window.FilterService = (function () {
       return;
     }
 
+    // Validate that the requested county is one of the allowed 5
+    if (!ALLOWED_COUNTIES.includes(countyName)) {
+      console.warn(`County ${countyName} is outside the allowed list.`);
+      return;
+    }
+
     // 1. Query county geometry (using WTM SR 3071 matching parcel layer)
     const url = "https://services7.arcgis.com/Tk0IbKIKhaoYn5sa/arcgis/rest/services/WisconsinCountyBoundary/FeatureServer/0/query";
     const params = new URLSearchParams({
@@ -106,7 +110,7 @@ window.FilterService = (function () {
       spatialReference: { wkid: 3071 }
     });
 
-    // 2. Apply server-side spatial / attribute filter to parcels
+    // 2. Apply server-side spatial & attribute filter to parcels
     applyFilter(parcelLayer, polygon, `UPPER(CONAME) = '${countyName.toUpperCase().replace(/'/g, "''")}'`);
 
     // 3. Render boundary highlight & zoom
