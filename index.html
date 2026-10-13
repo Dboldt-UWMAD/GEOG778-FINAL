@@ -29,11 +29,11 @@
     </div>
     <div class="brand-titles">
       <h1>Wisconsin Land &amp; Boundary Explorer</h1>
-      <p>Parcels • Municipalities • County Boundaries</p>
+      <p>Parcels • County Boundaries • Owner Analytics</p>
     </div>
     <div id="layerBadge" class="status-pill" aria-live="polite">
       <span class="status-dot" aria-hidden="true"></span>
-      <span id="layerBadgeText">3/3 Layers Visible</span>
+      <span id="layerBadgeText">2/2 Layers Visible</span>
     </div>
   </header>
 
@@ -54,8 +54,8 @@
       <button class="tab-nav-btn active" role="tab" aria-selected="true" data-tab="tab-layers">
         <i class="fa-solid fa-layer-group" aria-hidden="true"></i> Layers
       </button>
-      <button class="tab-nav-btn" role="tab" aria-selected="false" data-tab="tab-clip">
-        <i class="fa-solid fa-crop-simple" aria-hidden="true"></i> Clip Area
+      <button class="tab-nav-btn" role="tab" aria-selected="false" data-tab="tab-analytics">
+        <i class="fa-solid fa-chart-column" aria-hidden="true"></i> Top 5 States
       </button>
       <button class="tab-nav-btn" role="tab" aria-selected="false" data-tab="tab-legend">
         <i class="fa-solid fa-list-ul" aria-hidden="true"></i> Legend
@@ -65,8 +65,29 @@
       </button>
     </nav>
 
-    <!-- Tab 1: Layer Controls -->
+    <!-- Tab 1: Layer & County Filter Controls -->
     <div id="tab-layers" class="panel-body tab-page" role="tabpanel">
+      <!-- County Filter Selector -->
+      <section class="surface-card">
+        <div class="layer-title-text" style="display: flex; align-items: center; justify-content: space-between;">
+          <span><i class="fa-solid fa-filter" style="color: var(--color-primary); margin-right: 6px;"></i> County Filter</span>
+          <span id="clipBadge" class="filter-pill" style="display: none;"></span>
+        </div>
+        <p style="font-size: 0.74rem; color: var(--color-text-muted);">
+          Select a county to isolate its parcels and highlight its boundary.
+        </p>
+
+        <div class="select-group">
+          <select id="countySelect" class="custom-select" aria-label="Select County Filter">
+            <option value="">All 5 Counties</option>
+          </select>
+        </div>
+
+        <button id="resetClipBtn" class="btn-action" style="display: none;" title="Show all counties">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i> Clear County Filter
+        </button>
+      </section>
+
       <!-- Layer 1: Parcels -->
       <section class="surface-card">
         <div class="layer-header-row">
@@ -98,34 +119,7 @@
         </button>
       </section>
 
-      <!-- Layer 2: Municipalities -->
-      <section class="surface-card">
-        <div class="layer-header-row">
-          <div class="layer-meta">
-            <div class="layer-icon-badge badge-munis" aria-hidden="true">
-              <i class="fa-solid fa-city"></i>
-            </div>
-            <div>
-              <div class="layer-title-text">Municipality Boundary</div>
-              <div class="layer-subtext">WI DNR Map Service</div>
-            </div>
-          </div>
-          <label class="toggle-switch" title="Toggle Municipalities Visibility">
-            <input type="checkbox" id="muniToggle" checked aria-label="Toggle Municipality Boundaries" />
-            <span class="switch-rail"></span>
-          </label>
-        </div>
-
-        <div class="control-slider-group">
-          <div class="slider-meta">
-            <span>Opacity</span>
-            <span id="muniOpacityLabel">85%</span>
-          </div>
-          <input type="range" id="muniOpacitySlider" class="slider-input" min="0" max="100" value="85" aria-label="Municipality Opacity" />
-        </div>
-      </section>
-
-      <!-- Layer 3: Counties -->
+      <!-- Layer 2: Counties -->
       <section class="surface-card">
         <div class="layer-header-row">
           <div class="layer-meta">
@@ -134,7 +128,7 @@
             </div>
             <div>
               <div class="layer-title-text">County Boundaries</div>
-              <div class="layer-subtext">WI 72 County Polygons</div>
+              <div class="layer-subtext">Grant, Green, Iowa, Lafayette, Richland</div>
             </div>
           </div>
           <label class="toggle-switch" title="Toggle Counties Visibility">
@@ -172,67 +166,33 @@
           </button>
         </div>
       </section>
-
-      <div class="callout-box">
-        <i class="fa-solid fa-lightbulb" style="color: #eab308; margin-right: 4px;" aria-hidden="true"></i>
-        Click on any parcel, municipality, or county on the map to inspect ownership, assessment, and geographic metadata.
-      </div>
     </div>
 
-    <!-- Tab 2: Spatial Clip Area (NEW) -->
-    <div id="tab-clip" class="panel-body tab-page" role="tabpanel" style="display: none;">
+    <!-- Tab 2: Top 5 States Analytics (Intelligent Dynamic Bar Chart) -->
+    <div id="tab-analytics" class="panel-body tab-page" role="tabpanel" style="display: none;">
       <section class="surface-card">
-        <div class="layer-title-text" style="display: flex; align-items: center; gap: 6px;">
-          <i class="fa-solid fa-crop" style="color: var(--color-primary);" aria-hidden="true"></i> Filter Parcels By Area
+        <div class="layer-header-row">
+          <div class="layer-title-text">
+            <i class="fa-solid fa-ranking-star" style="color: #f59e0b; margin-right: 6px;"></i> Top 5 Owner States
+          </div>
+          <span id="chartScopeLabel" class="chart-scope-tag">5-County Region</span>
         </div>
-        <p style="font-size: 0.74rem; color: var(--color-text-muted); line-height: 1.4;">
-          Select a county or municipality to spatially mask parcels exclusively to that boundary.
+        <p style="font-size: 0.73rem; color: var(--color-text-muted); line-height: 1.4;">
+          Distribution of parcel ownership by recorded owner mailing state. Automatically recalculates when you filter by county.
         </p>
 
-        <!-- Mode Radios -->
-        <div class="clip-mode-selector">
-          <label class="clip-radio-label">
-            <input type="radio" name="clipMode" value="all" checked />
-            <span>All Wisconsin</span>
-          </label>
-          <label class="clip-radio-label">
-            <input type="radio" name="clipMode" value="county" />
-            <span>County</span>
-          </label>
-          <label class="clip-radio-label">
-            <input type="radio" name="clipMode" value="muni" />
-            <span>Municipality</span>
-          </label>
-        </div>
-
-        <!-- County Dropdown -->
-        <div id="countySelectWrap" class="select-group" style="display: none;">
-          <label for="countySelect" class="select-label">Select County:</label>
-          <select id="countySelect" class="custom-select">
-            <option value="">Loading counties...</option>
-          </select>
-        </div>
-
-        <!-- Municipality Dropdown -->
-        <div id="muniSelectWrap" class="select-group" style="display: none;">
-          <label for="muniSelect" class="select-label">Select City or Village:</label>
-          <select id="muniSelect" class="custom-select">
-            <option value="">Loading municipalities...</option>
-          </select>
-        </div>
-
-        <!-- Active Filter Status & Reset Button -->
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-          <span id="clipBadge" class="filter-pill" style="display: none;"></span>
-          <button id="resetClipBtn" class="btn-action" style="display: none; width: auto; padding: 6px 12px; margin-left: auto;">
-            <i class="fa-solid fa-xmark"></i> Clear Filter
-          </button>
+        <!-- Dynamic Bar Chart Track Container -->
+        <div id="barChartContainer" class="bar-chart-container" aria-live="polite">
+          <div class="chart-loading-placeholder">
+            <div class="spinner-icon"></div>
+            <span>Calculating state counts...</span>
+          </div>
         </div>
       </section>
 
       <div class="callout-box">
-        <i class="fa-solid fa-circle-check" style="color: var(--color-success); margin-right: 4px;" aria-hidden="true"></i>
-        Clipping queries the boundary geometry directly from official Wisconsin GIS servers and applies an instant spatial mask to the parcel layer.
+        <i class="fa-solid fa-brain" style="color: var(--color-primary); margin-right: 4px;" aria-hidden="true"></i>
+        <strong>Intelligent Analytics:</strong> Uses live ArcGIS REST statistics queries. Selecting any county from the menu or clicking a county on the map updates this breakdown in real time.
       </div>
     </div>
 
@@ -265,17 +225,7 @@
           <div class="card-divider"></div>
 
           <div>
-            <strong style="font-size: 0.8rem;">2. Municipality Boundaries</strong>
-            <p style="font-size: 0.74rem; color: var(--color-text-muted);">Wisconsin Department of Natural Resources</p>
-            <a class="service-link" href="https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_Municipality_Boundary_WTM_Ext/MapServer" target="_blank" rel="noopener">
-              <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> REST MapServer
-            </a>
-          </div>
-
-          <div class="card-divider"></div>
-
-          <div>
-            <strong style="font-size: 0.8rem;">3. Wisconsin County Boundaries</strong>
+            <strong style="font-size: 0.8rem;">2. Wisconsin County Boundaries</strong>
             <p style="font-size: 0.74rem; color: var(--color-text-muted);">Census TIGER/Line County Extents</p>
             <a class="service-link" href="https://services7.arcgis.com/Tk0IbKIKhaoYn5sa/arcgis/rest/services/WisconsinCountyBoundary/FeatureServer" target="_blank" rel="noopener">
               <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i> REST FeatureServer

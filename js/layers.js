@@ -1,20 +1,16 @@
 /**
  * Layer Management Service
- * Factory and lifecycle controller for GIS Feature and MapImage layers.
+ * Factory and lifecycle controller for GIS layers (Parcels & Counties).
  */
 
 window.LayerService = (function () {
   let parcelLayer = null;
-  let muniLayer = null;
   let countyLayer = null;
 
-  /**
-   * Instantiate and configure layers using ArcGIS SDK modules
-   */
-  function initLayers(FeatureLayer, MapImageLayer, config) {
-    const { parcels, municipalities, counties } = config.services;
+  function initLayers(FeatureLayer, config) {
+    const { parcels, counties } = config.services;
 
-    // 1. County Boundaries Layer (Base layer for spatial reference)
+    // 1. County Boundaries Layer
     countyLayer = new FeatureLayer({
       url: counties.url,
       title: counties.title,
@@ -25,23 +21,7 @@ window.LayerService = (function () {
       popupTemplate: counties.popupTemplate
     });
 
-    // 2. Municipality Boundaries Layer (WI DNR Dynamic Map Service)
-    muniLayer = new MapImageLayer({
-      url: municipalities.url,
-      title: municipalities.title,
-      opacity: municipalities.defaultOpacity,
-      visible: municipalities.defaultVisible,
-      sublayers: [
-        {
-          id: municipalities.sublayerId,
-          visible: true,
-          title: "Municipality Boundary",
-          popupTemplate: municipalities.popupTemplate
-        }
-      ]
-    });
-
-    // 3. Statewide Parcels Layer (Highest detail feature layer)
+    // 2. Statewide Parcels Layer
     parcelLayer = new FeatureLayer({
       url: parcels.url,
       title: parcels.title,
@@ -53,16 +33,14 @@ window.LayerService = (function () {
 
     return {
       parcelLayer,
-      muniLayer,
       countyLayer,
-      orderedLayers: [countyLayer, muniLayer, parcelLayer]
+      orderedLayers: [countyLayer, parcelLayer]
     };
   }
 
   function getLayer(key) {
     switch (key) {
       case "parcels": return parcelLayer;
-      case "municipalities": return muniLayer;
       case "counties": return countyLayer;
       default: return null;
     }
@@ -83,7 +61,7 @@ window.LayerService = (function () {
   }
 
   function getActiveCount() {
-    return [parcelLayer, muniLayer, countyLayer].filter((l) => l && l.visible).length;
+    return [parcelLayer, countyLayer].filter((l) => l && l.visible).length;
   }
 
   async function zoomToParcelExtent(view) {
@@ -95,7 +73,7 @@ window.LayerService = (function () {
         return;
       }
     } catch {
-      // Fallback to pre-defined fullExtent if available
+      // Fallback
     }
 
     if (parcelLayer.fullExtent) {

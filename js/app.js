@@ -1,6 +1,6 @@
 /**
  * Application Bootstrap & Map Orchestrator
- * Connects ArcGIS MapView, Layer Services, Filter Services, Widgets, and UI Controller.
+ * Connects ArcGIS MapView, Layer Services, Filter Services, Top 5 Bar Chart, and UI Controller.
  */
 
 (function () {
@@ -8,7 +8,6 @@
     "esri/Map",
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
-    "esri/layers/MapImageLayer",
     "esri/layers/GraphicsLayer",
     "esri/Graphic",
     "esri/geometry/Polygon",
@@ -22,7 +21,6 @@
     Map,
     MapView,
     FeatureLayer,
-    MapImageLayer,
     GraphicsLayer,
     Graphic,
     Polygon,
@@ -38,10 +36,11 @@
     const filterService = window.FilterService;
     const uiController = window.UIController;
 
-    // 1. Initialize GIS Layers
-    const { parcelLayer, muniLayer, countyLayer, orderedLayers } = layerService.initLayers(
+    let activeCounty = "";
+
+    // 1. Initialize GIS Layers (Parcels & Counties)
+    const { parcelLayer, countyLayer, orderedLayers } = layerService.initLayers(
       FeatureLayer,
-      MapImageLayer,
       config
     );
 
@@ -51,7 +50,6 @@
       layers: orderedLayers
     });
 
-    // Initialize Graphic Highlight Layer for Spatial Clipping
     filterService.init(GraphicsLayer, map);
 
     const view = new MapView({
@@ -85,10 +83,19 @@
       container: "legendDiv",
       layerInfos: [
         { layer: parcelLayer, title: "Parcels (Mailing State)" },
-        { layer: muniLayer, title: "WI DNR Municipalities" },
         { layer: countyLayer, title: "County Boundaries" }
       ]
     });
+
+    // Helper: update live bar chart
+    async function updateChart(county) {
+      try {
+        const top5 = await filterService.fetchTop5States(county);
+        uiController.renderBarChart(top5, county);
+      } catch (err) {
+        console.error("Error refreshing top 5 chart:", err);
+      }
+    }
 
     // 5. Connect UI Controller & Event Handlers
     uiController.init({
@@ -106,34 +113,27 @@
         map.basemap = basemapKey;
       },
       async onCountySelected(countyName) {
+        activeCounty = countyName;
         try {
           await filterService.clipToCounty(countyName, view, parcelLayer, Graphic, Polygon);
         } catch (err) {
-          console.error("County clipping error:", err);
+          console.error("County filter error:", err);
         }
+        await updateChart(activeCounty);
       },
-      async onMuniSelected(muniId) {
-        try {
-          await filterService.clipToMunicipality(muniId, view, parcelLayer, Graphic, Polygon);
-        } catch (err) {
-          console.error("Municipality clipping error:", err);
-        }
-      },
-      onResetClip() {
-        filterService.clearClip(parcelLayer, view);
+      async onResetClip() {
+        activeCounty = "";
+        await filterService.clearClip(parcelLayer);
+        await updateChart("");
       }
     });
 
-    // 6. Asynchronously populate County and Municipality Selectors
-    filterService.loadCounties().then((counties) => {
-      uiController.populateCountySelect(counties);
-    }).catch((err) => console.warn("Failed to load county list:", err));
+    // 6. Populate County Select dropdown & load initial chart
+    const allowedCounties = filterService.loadCounties();
+    uiController.populateCountySelect(allowedCounties);
+    updateChart("");
 
-    filterService.loadMunicipalities().then((munis) => {
-      uiController.populateMuniSelect(munis);
-    }).catch((err) => console.warn("Failed to load municipalities list:", err));
-
-    // 7. Handle Popup Action: "Filter parcels to this County"
+    // 7. Handle County Popup Action: "Filter parcels to this County"
     reactiveUtils.on(
       () => view.popup,
       "trigger-action",
@@ -142,8 +142,10 @@
           const selectedFeature = view.popup.selectedFeature;
           const countyName = selectedFeature?.attributes?.name;
           if (countyName && filterService.ALLOWED_COUNTIES.includes(countyName)) {
+            activeCounty = countyName;
             uiController.setCountySelection(countyName);
             await filterService.clipToCounty(countyName, view, parcelLayer, Graphic, Polygon);
+            await updateChart(activeCounty);
           }
         }
       }

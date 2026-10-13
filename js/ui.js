@@ -1,6 +1,7 @@
 /**
  * UI & Interaction Controller
- * Manages view states, segmented tabs, spatial clipping filters, and DOM events.
+ * Manages view states, segmented tabs, county filter selection,
+ * and the dynamic Top 5 Owner Mailing States bar chart.
  */
 
 window.UIController = (function () {
@@ -27,24 +28,19 @@ window.UIController = (function () {
       parcelOpacityLabel: document.getElementById("parcelOpacityLabel"),
       zoomExtentBtn: document.getElementById("zoomExtentBtn"),
 
-      // Layer 2: Municipalities
-      muniToggle: document.getElementById("muniToggle"),
-      muniOpacity: document.getElementById("muniOpacitySlider"),
-      muniOpacityLabel: document.getElementById("muniOpacityLabel"),
-
-      // Layer 3: Counties
+      // Layer 2: Counties
       countyToggle: document.getElementById("countyToggle"),
       countyOpacity: document.getElementById("countyOpacitySlider"),
       countyOpacityLabel: document.getElementById("countyOpacityLabel"),
 
-      // Spatial Clipping Controls
-      clipModeRadios: document.querySelectorAll('input[name="clipMode"]'),
-      countySelectWrap: document.getElementById("countySelectWrap"),
+      // County Filter Controls
       countySelect: document.getElementById("countySelect"),
-      muniSelectWrap: document.getElementById("muniSelectWrap"),
-      muniSelect: document.getElementById("muniSelect"),
       resetClipBtn: document.getElementById("resetClipBtn"),
       clipBadge: document.getElementById("clipBadge"),
+
+      // Top 5 States Bar Chart Container
+      barChartContainer: document.getElementById("barChartContainer"),
+      chartScopeLabel: document.getElementById("chartScopeLabel"),
 
       // Basemap Buttons
       basemapCards: document.querySelectorAll(".basemap-card"),
@@ -54,7 +50,7 @@ window.UIController = (function () {
     };
   }
 
-  function updateStatusBadge(activeCount, totalCount = 3) {
+  function updateStatusBadge(activeCount, totalCount = 2) {
     if (!elements.statusText || !elements.statusPill) return;
     elements.statusText.textContent = `${activeCount}/${totalCount} Layers Visible`;
     if (activeCount === 0) {
@@ -66,7 +62,7 @@ window.UIController = (function () {
 
   function populateCountySelect(counties) {
     if (!elements.countySelect) return;
-    elements.countySelect.innerHTML = '<option value="">-- Choose a County --</option>';
+    elements.countySelect.innerHTML = '<option value="">All 5 Counties</option>';
     counties.forEach((c) => {
       const opt = document.createElement("option");
       opt.value = c;
@@ -75,28 +71,64 @@ window.UIController = (function () {
     });
   }
 
-  function populateMuniSelect(munis) {
-    if (!elements.muniSelect) return;
-    elements.muniSelect.innerHTML = '<option value="">-- Choose a Municipality --</option>';
-    munis.forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m.id;
-      opt.textContent = m.name;
-      elements.muniSelect.appendChild(opt);
-    });
+  function setCountySelection(countyName) {
+    if (elements.countySelect) {
+      elements.countySelect.value = countyName || "";
+    }
+    if (countyName) {
+      if (elements.resetClipBtn) elements.resetClipBtn.style.display = "inline-flex";
+      if (elements.clipBadge) {
+        elements.clipBadge.style.display = "inline-flex";
+        elements.clipBadge.textContent = `${countyName} County`;
+      }
+    } else {
+      if (elements.resetClipBtn) elements.resetClipBtn.style.display = "none";
+      if (elements.clipBadge) elements.clipBadge.style.display = "none";
+    }
   }
 
-  function setCountySelection(countyName) {
-    const countyRadio = document.querySelector('input[name="clipMode"][value="county"]');
-    if (countyRadio) countyRadio.checked = true;
-    if (elements.countySelectWrap) elements.countySelectWrap.style.display = "flex";
-    if (elements.muniSelectWrap) elements.muniSelectWrap.style.display = "none";
-    if (elements.resetClipBtn) elements.resetClipBtn.style.display = "inline-flex";
-    if (elements.countySelect) elements.countySelect.value = countyName;
-    if (elements.clipBadge) {
-      elements.clipBadge.style.display = "inline-flex";
-      elements.clipBadge.textContent = `Clipped: ${countyName} Co.`;
+  /**
+   * Render dynamic, responsive bar chart for top 5 owner states
+   */
+  function renderBarChart(stateData, currentCounty) {
+    if (!elements.barChartContainer) return;
+
+    if (elements.chartScopeLabel) {
+      elements.chartScopeLabel.textContent = currentCounty
+        ? `${currentCounty} County`
+        : "5-County Region";
     }
+
+    if (!stateData || stateData.length === 0) {
+      elements.barChartContainer.innerHTML = '<p style="font-size: 0.74rem; color: var(--color-text-muted);">No parcel data available.</p>';
+      return;
+    }
+
+    const maxCount = Math.max(...stateData.map((d) => d.count), 1);
+
+    const html = stateData
+      .map((item, idx) => {
+        const percent = Math.max(6, Math.round((item.count / maxCount) * 100));
+        const formattedCount = item.count.toLocaleString();
+        const isWI = item.state === "WI";
+        const barColor = isWI
+          ? "linear-gradient(90deg, #2563eb 0%, #38bdf8 100%)"
+          : "linear-gradient(90deg, #6366f1 0%, #a855f7 100%)";
+
+        return `
+          <div class="chart-row">
+            <div class="chart-state-badge ${isWI ? 'highlight' : ''}">${item.state}</div>
+            <div class="chart-bar-track">
+              <div class="chart-bar-fill" style="width: ${percent}%; background: ${barColor};">
+                <span class="chart-bar-val">${formattedCount}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    elements.barChartContainer.innerHTML = html;
   }
 
   function bindEvents({
@@ -105,7 +137,6 @@ window.UIController = (function () {
     onZoomExtent,
     onBasemapChange,
     onCountySelected,
-    onMuniSelected,
     onResetClip
   }) {
     // 1. Collapsible Panel
@@ -134,7 +165,6 @@ window.UIController = (function () {
     // 3. Layer Toggles & Opacity
     const layerConfigs = [
       { key: "parcels", toggle: elements.parcelToggle, slider: elements.parcelOpacity, label: elements.parcelOpacityLabel },
-      { key: "municipalities", toggle: elements.muniToggle, slider: elements.muniOpacity, label: elements.muniOpacityLabel },
       { key: "counties", toggle: elements.countyToggle, slider: elements.countyOpacity, label: elements.countyOpacityLabel }
     ];
 
@@ -150,77 +180,27 @@ window.UIController = (function () {
       });
     });
 
-    // 4. Spatial Clip Mode Switcher (All / County / Muni)
-    elements.clipModeRadios.forEach((radio) => {
-      radio.addEventListener("change", (e) => {
-        const mode = e.target.value;
-        if (mode === "all") {
-          elements.countySelectWrap.style.display = "none";
-          elements.muniSelectWrap.style.display = "none";
-          elements.resetClipBtn.style.display = "none";
-          elements.clipBadge.style.display = "none";
-          onResetClip();
-        } else if (mode === "county") {
-          elements.countySelectWrap.style.display = "flex";
-          elements.muniSelectWrap.style.display = "none";
-          elements.resetClipBtn.style.display = "inline-flex";
-          if (elements.countySelect.value) {
-            onCountySelected(elements.countySelect.value);
-          }
-        } else if (mode === "muni") {
-          elements.countySelectWrap.style.display = "none";
-          elements.muniSelectWrap.style.display = "flex";
-          elements.resetClipBtn.style.display = "inline-flex";
-          if (elements.muniSelect.value) {
-            onMuniSelected(elements.muniSelect.value);
-          }
-        }
-      });
-    });
-
-    // 5. County Selector Event
+    // 4. County Selector Event
     elements.countySelect?.addEventListener("change", (e) => {
       const county = e.target.value;
+      setCountySelection(county);
       if (county) {
-        setCountySelection(county);
         onCountySelected(county);
       } else {
-        elements.clipBadge.style.display = "none";
         onResetClip();
       }
     });
 
-    // 6. Municipality Selector Event
-    elements.muniSelect?.addEventListener("change", (e) => {
-      const muniId = e.target.value;
-      if (muniId) {
-        const text = elements.muniSelect.options[elements.muniSelect.selectedIndex].text;
-        elements.clipBadge.style.display = "inline-flex";
-        elements.clipBadge.textContent = `Clipped: ${text}`;
-        onMuniSelected(muniId);
-      } else {
-        elements.clipBadge.style.display = "none";
-        onResetClip();
-      }
-    });
-
-    // 7. Reset Clip Button
+    // 5. Reset Filter Button
     elements.resetClipBtn?.addEventListener("click", () => {
-      const allRadio = document.querySelector('input[name="clipMode"][value="all"]');
-      if (allRadio) allRadio.checked = true;
-      elements.countySelectWrap.style.display = "none";
-      elements.muniSelectWrap.style.display = "none";
-      elements.resetClipBtn.style.display = "none";
-      elements.clipBadge.style.display = "none";
-      if (elements.countySelect) elements.countySelect.value = "";
-      if (elements.muniSelect) elements.muniSelect.value = "";
+      setCountySelection("");
       onResetClip();
     });
 
-    // 8. Zoom Extent Button
+    // 6. Zoom Extent Button
     elements.zoomExtentBtn?.addEventListener("click", onZoomExtent);
 
-    // 9. Basemap Switcher
+    // 7. Basemap Switcher
     elements.basemapCards.forEach((card) => {
       card.addEventListener("click", () => {
         elements.basemapCards.forEach((c) => c.classList.remove("active"));
@@ -248,8 +228,8 @@ window.UIController = (function () {
       bindEvents(callbacks);
     },
     populateCountySelect,
-    populateMuniSelect,
     setCountySelection,
+    renderBarChart,
     updateStatusBadge,
     bindLoadingIndicator
   };

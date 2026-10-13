@@ -1,19 +1,28 @@
 /**
- * Spatial Clip & Filter Service
- * Restricts parcel boundaries directly by the county field "CONAME" on the parcel layer
- * (Grant, Green, Iowa, Lafayette, Richland), with map click selection and polygon highlighting.
+ * County Filter & Top 5 Owner Mailing States Analytics Service
+ * Provides county parcel filtering by CONAME, polygon outline highlights,
+ * and live dynamic aggregation for the top 5 owner states.
  */
 
 window.FilterService = (function () {
   let graphicsLayer = null;
 
-  // Exact 5 counties present in the Wisconsin Statewide Parcel by State Ownership dataset
+  // The 5 target counties present in the parcel dataset
   const ALLOWED_COUNTIES = Object.freeze([
     "Grant",
     "Green",
     "Iowa",
     "Lafayette",
     "Richland"
+  ]);
+
+  // Valid 2-letter US State postal codes (filters out data-entry noise like "Well")
+  const US_STATES = new Set([
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+    "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+    "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+    "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+    "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"
   ]);
 
   function init(GraphicsLayer, map) {
@@ -24,60 +33,17 @@ window.FilterService = (function () {
     map.add(graphicsLayer);
   }
 
-  /**
-   * Return the strict list of target counties
-   */
-  async function loadCounties() {
+  function loadCounties() {
     return [...ALLOWED_COUNTIES];
   }
 
   /**
-   * Fetch distinct municipalities within the 5 target counties' bounding extent
-   */
-  async function loadMunicipalities() {
-    const url = "https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_Municipality_Boundary_WTM_Ext/MapServer/0/query";
-    const params = new URLSearchParams({
-      geometry: JSON.stringify({
-        xmin: 426762,
-        ymin: 225497,
-        xmax: 572107,
-        ymax: 342460,
-        spatialReference: { wkid: 3071 }
-      }),
-      geometryType: "esriGeometryEnvelope",
-      spatialRel: "esriSpatialRelIntersects",
-      inSR: "3071",
-      where: "MCD_TYPE_CODE in ('C','V')",
-      outFields: "OBJECTID,MCD_NAME,MCD_LOWERCASE_NAME,MCD_TYPE_CODE",
-      returnGeometry: "false",
-      orderByFields: "MCD_LOWERCASE_NAME ASC",
-      resultRecordCount: "1000",
-      f: "pjson"
-    });
-
-    const res = await fetch(`${url}?${params.toString()}`);
-    const data = await res.json();
-    const mapItems = new Map();
-
-    (data.features || []).forEach((f) => {
-      const id = f.attributes?.OBJECTID;
-      const name = f.attributes?.MCD_LOWERCASE_NAME || f.attributes?.MCD_NAME;
-      const type = f.attributes?.MCD_TYPE_CODE === "C" ? "City" : "Village";
-      if (id && name && !mapItems.has(name)) {
-        mapItems.set(name, { id, name: `${name} (${type})`, rawName: name });
-      }
-    });
-
-    return Array.from(mapItems.values()).sort((a, b) => a.rawName.localeCompare(b.rawName));
-  }
-
-  /**
    * Filter the parcel layer to ONLY show parcels in the selected county
-   * uses the CONAME (County Name) attribute on the parcel layer: CONAME = 'GRANT', etc.
+   * uses the CONAME attribute on the parcel layer: CONAME = 'GRANT', etc.
    */
   async function clipToCounty(countyName, view, parcelLayer, Graphic, Polygon) {
     if (!countyName) {
-      await clearClip(parcelLayer, view);
+      await clearClip(parcelLayer);
       return;
     }
 
@@ -86,23 +52,14 @@ window.FilterService = (function () {
     );
 
     if (!matchedCounty) {
-      console.warn(`County ${countyName} is not one of the 5 supported counties.`);
+      console.warn(`County ${countyName} is not in the allowed list.`);
       return;
     }
 
-    // 1. Direct attribute filter on the parcel layer using CONAME (all uppercase in the database)
     const upperCounty = matchedCounty.toUpperCase();
     parcelLayer.definitionExpression = `CONAME = '${upperCounty}'`;
 
-    // Clear any previous layerView client filter
-    try {
-      const layerView = await view.whenLayerView(parcelLayer);
-      layerView.filter = null;
-    } catch {
-      // ignore
-    }
-
-    // 2. Query and highlight the county boundary polygon
+    // Query and highlight the county boundary polygon
     try {
       const url = "https://services7.arcgis.com/Tk0IbKIKhaoYn5sa/arcgis/rest/services/WisconsinCountyBoundary/FeatureServer/0/query";
       const params = new URLSearchParams({
@@ -131,63 +88,13 @@ window.FilterService = (function () {
       console.warn("Could not retrieve boundary graphic:", err);
     }
 
-    // Fallback: zoom to parcel extent matching the definitionExpression
     try {
       const extentResult = await parcelLayer.queryExtent();
-      if (extentResult && extentResult.extent) {
+      if (extentResult?.extent) {
         await view.goTo(extentResult.extent.expand(1.15), { duration: 900 });
       }
     } catch {
-      // Ignore extent error
-    }
-  }
-
-  /**
-   * Filter the parcel layer to a selected Municipality
-   */
-  async function clipToMunicipality(objectId, view, parcelLayer, Graphic, Polygon) {
-    if (!objectId) {
-      await clearClip(parcelLayer, view);
-      return;
-    }
-
-    try {
-      const url = "https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_Municipality_Boundary_WTM_Ext/MapServer/0/query";
-      const params = new URLSearchParams({
-        where: `OBJECTID = ${objectId}`,
-        outFields: "OBJECTID,MCD_NAME,MCD_LOWERCASE_NAME",
-        returnGeometry: "true",
-        outSR: "3071",
-        f: "pjson"
-      });
-
-      const res = await fetch(`${url}?${params.toString()}`);
-      const data = await res.json();
-      const feat = data.features?.[0];
-
-      if (!feat || !feat.geometry) {
-        throw new Error("Could not retrieve municipality geometry");
-      }
-
-      const polygon = new Polygon({
-        rings: feat.geometry.rings,
-        spatialReference: { wkid: 3071 }
-      });
-
-      // Filter via FeatureLayerView spatial filter so only parcels inside this municipality render
-      const layerView = await view.whenLayerView(parcelLayer);
-      layerView.filter = {
-        geometry: polygon,
-        spatialRelationship: "intersects"
-      };
-
-      // Reset definition expression so it considers all parcels across the region
-      parcelLayer.definitionExpression = null;
-
-      highlightBoundary(polygon, Graphic);
-      await view.goTo(polygon.extent.expand(1.15), { duration: 900 });
-    } catch (err) {
-      console.error("Municipality clip error:", err);
+      // Ignore
     }
   }
 
@@ -211,30 +118,66 @@ window.FilterService = (function () {
     graphicsLayer.add(graphic);
   }
 
-  async function clearClip(parcelLayer, view) {
+  async function clearClip(parcelLayer) {
     if (parcelLayer) {
       parcelLayer.definitionExpression = null;
-      if (view) {
-        try {
-          const layerView = await view.whenLayerView(parcelLayer);
-          layerView.filter = null;
-        } catch {
-          // ignore
-        }
-      }
     }
     if (graphicsLayer) {
       graphicsLayer.removeAll();
     }
   }
 
+  /**
+   * Intelligently queries the parcel layer for top 5 owner mailing states
+   * dynamically responding to the current county filter (or all 5 counties).
+   */
+  async function fetchTop5States(currentCounty) {
+    const url = "https://services.arcgis.com/HRPe58bUyBqyyiCt/arcgis/rest/services/Parcel_by_State_Ownership/FeatureServer/4/query";
+
+    let whereClause = "mailing_state IS NOT NULL";
+    if (currentCounty && ALLOWED_COUNTIES.includes(currentCounty)) {
+      whereClause += ` AND CONAME = '${currentCounty.toUpperCase()}'`;
+    }
+
+    const params = new URLSearchParams({
+      where: whereClause,
+      groupByFieldsForStatistics: "mailing_state",
+      outStatistics: JSON.stringify([
+        {
+          statisticType: "count",
+          onStatisticField: "OBJECTID",
+          outStatisticFieldName: "state_count"
+        }
+      ]),
+      orderByFields: "state_count DESC",
+      resultRecordCount: "12",
+      f: "pjson"
+    });
+
+    const res = await fetch(`${url}?${params.toString()}`);
+    const data = await res.json();
+    const rawFeatures = data.features || [];
+
+    // Filter valid state abbreviations and extract top 5
+    const validStates = [];
+    for (const f of rawFeatures) {
+      const st = (f.attributes?.mailing_state || "").trim().toUpperCase();
+      const count = f.attributes?.state_count || 0;
+      if (US_STATES.has(st)) {
+        validStates.push({ state: st, count });
+        if (validStates.length === 5) break;
+      }
+    }
+
+    return validStates;
+  }
+
   return {
     init,
     ALLOWED_COUNTIES,
     loadCounties,
-    loadMunicipalities,
     clipToCounty,
-    clipToMunicipality,
-    clearClip
+    clearClip,
+    fetchTop5States
   };
 })();

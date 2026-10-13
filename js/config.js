@@ -5,7 +5,7 @@
 
 window.AppConfig = Object.freeze({
   map: {
-    initialCenter: [-90.4, 43.1], // Focused on the 5-county region (Grant, Green, Iowa, Lafayette, Richland)
+    initialCenter: [-90.4, 43.1], // Southwestern Wisconsin (Grant, Green, Iowa, Lafayette, Richland)
     initialZoom: 9,
     minZoom: 6,
     maxZoom: 20,
@@ -46,28 +46,6 @@ window.AppConfig = Object.freeze({
               },
               { fieldName: "TAXROLLYEAR", label: "Tax Roll Year" },
               { fieldName: "STATEID", label: "State ID" }
-            ]
-          }
-        ]
-      }
-    },
-
-    municipalities: {
-      url: "https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_Municipality_Boundary_WTM_Ext/MapServer",
-      title: "Municipality Boundaries (WI DNR)",
-      defaultOpacity: 0.85,
-      defaultVisible: true,
-      sublayerId: 0,
-      popupTemplate: {
-        title: "{MCD_NAME}",
-        content: [
-          {
-            type: "fields",
-            fieldInfos: [
-              { fieldName: "MCD_NAME", label: "Municipality Name" },
-              { fieldName: "MCD_TYPE_CODE", label: "Type Code" },
-              { fieldName: "MCD_TOTAL_SQMI_AMT", label: "Square Miles", format: { places: 2 } },
-              { fieldName: "MCD_FIPS_CODE", label: "FIPS Code" }
             ]
           }
         ]
