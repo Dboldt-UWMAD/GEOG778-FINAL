@@ -1,6 +1,6 @@
 /**
  * Application Bootstrap & Map Orchestrator
- * Connects ArcGIS MapView, Layer Services, Widgets, and UI Controller.
+ * Connects ArcGIS MapView, Layer Services, Filter Services, Widgets, and UI Controller.
  */
 
 (function () {
@@ -9,6 +9,9 @@
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
     "esri/layers/MapImageLayer",
+    "esri/layers/GraphicsLayer",
+    "esri/Graphic",
+    "esri/geometry/Polygon",
     "esri/widgets/Legend",
     "esri/widgets/Home",
     "esri/widgets/ScaleBar",
@@ -19,6 +22,9 @@
     MapView,
     FeatureLayer,
     MapImageLayer,
+    GraphicsLayer,
+    Graphic,
+    Polygon,
     Legend,
     Home,
     ScaleBar,
@@ -27,6 +33,7 @@
   ) {
     const config = window.AppConfig;
     const layerService = window.LayerService;
+    const filterService = window.FilterService;
     const uiController = window.UIController;
 
     // 1. Initialize GIS Layers
@@ -41,6 +48,9 @@
       basemap: config.map.defaultBasemap,
       layers: orderedLayers
     });
+
+    // Initialize Graphic Highlight Layer for Spatial Clipping
+    filterService.init(GraphicsLayer, map);
 
     const view = new MapView({
       container: "viewDiv",
@@ -92,10 +102,36 @@
       },
       onBasemapChange(basemapKey) {
         map.basemap = basemapKey;
+      },
+      async onCountySelected(countyName) {
+        try {
+          await filterService.clipToCounty(countyName, view, parcelLayer, Graphic, Polygon);
+        } catch (err) {
+          console.error("County clipping error:", err);
+        }
+      },
+      async onMuniSelected(muniId) {
+        try {
+          await filterService.clipToMunicipality(muniId, view, parcelLayer, Graphic, Polygon);
+        } catch (err) {
+          console.error("Municipality clipping error:", err);
+        }
+      },
+      onResetClip() {
+        filterService.clearClip(parcelLayer);
       }
     });
 
-    // 6. Connect Async Data Loading Feedback
+    // 6. Asynchronously populate County and Municipality Selectors
+    filterService.loadCounties().then((counties) => {
+      uiController.populateCountySelect(counties);
+    }).catch((err) => console.warn("Failed to load county list:", err));
+
+    filterService.loadMunicipalities().then((munis) => {
+      uiController.populateMuniSelect(munis);
+    }).catch((err) => console.warn("Failed to load municipalities list:", err));
+
+    // 7. Connect Async Data Loading Feedback
     view.whenLayerView(parcelLayer).then((layerView) => {
       uiController.bindLoadingIndicator(layerView);
     });

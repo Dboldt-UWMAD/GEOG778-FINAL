@@ -52,7 +52,10 @@
     <!-- Segmented Navigation Tabs -->
     <nav class="tab-nav" role="tablist">
       <button class="tab-nav-btn active" role="tab" aria-selected="true" data-tab="tab-layers">
-        <i class="fa-solid fa-layer-group" aria-hidden="true"></i> Layer Menu
+        <i class="fa-solid fa-layer-group" aria-hidden="true"></i> Layers
+      </button>
+      <button class="tab-nav-btn" role="tab" aria-selected="false" data-tab="tab-clip">
+        <i class="fa-solid fa-crop-simple" aria-hidden="true"></i> Clip Area
       </button>
       <button class="tab-nav-btn" role="tab" aria-selected="false" data-tab="tab-legend">
         <i class="fa-solid fa-list-ul" aria-hidden="true"></i> Legend
@@ -176,7 +179,64 @@
       </div>
     </div>
 
-    <!-- Tab 2: Symbology Legend -->
+    <!-- Tab 2: Spatial Clip Area (NEW) -->
+    <div id="tab-clip" class="panel-body tab-page" role="tabpanel" style="display: none;">
+      <section class="surface-card">
+        <div class="layer-title-text" style="display: flex; align-items: center; gap: 6px;">
+          <i class="fa-solid fa-crop" style="color: var(--color-primary);" aria-hidden="true"></i> Filter Parcels By Area
+        </div>
+        <p style="font-size: 0.74rem; color: var(--color-text-muted); line-height: 1.4;">
+          Select a county or municipality to spatially mask parcels exclusively to that boundary.
+        </p>
+
+        <!-- Mode Radios -->
+        <div class="clip-mode-selector">
+          <label class="clip-radio-label">
+            <input type="radio" name="clipMode" value="all" checked />
+            <span>All Wisconsin</span>
+          </label>
+          <label class="clip-radio-label">
+            <input type="radio" name="clipMode" value="county" />
+            <span>County</span>
+          </label>
+          <label class="clip-radio-label">
+            <input type="radio" name="clipMode" value="muni" />
+            <span>Municipality</span>
+          </label>
+        </div>
+
+        <!-- County Dropdown -->
+        <div id="countySelectWrap" class="select-group" style="display: none;">
+          <label for="countySelect" class="select-label">Select County:</label>
+          <select id="countySelect" class="custom-select">
+            <option value="">Loading counties...</option>
+          </select>
+        </div>
+
+        <!-- Municipality Dropdown -->
+        <div id="muniSelectWrap" class="select-group" style="display: none;">
+          <label for="muniSelect" class="select-label">Select City or Village:</label>
+          <select id="muniSelect" class="custom-select">
+            <option value="">Loading municipalities...</option>
+          </select>
+        </div>
+
+        <!-- Active Filter Status & Reset Button -->
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span id="clipBadge" class="filter-pill" style="display: none;"></span>
+          <button id="resetClipBtn" class="btn-action" style="display: none; width: auto; padding: 6px 12px; margin-left: auto;">
+            <i class="fa-solid fa-xmark"></i> Clear Filter
+          </button>
+        </div>
+      </section>
+
+      <div class="callout-box">
+        <i class="fa-solid fa-circle-check" style="color: var(--color-success); margin-right: 4px;" aria-hidden="true"></i>
+        Clipping queries the boundary geometry directly from official Wisconsin GIS servers and applies an instant spatial mask to the parcel layer.
+      </div>
+    </div>
+
+    <!-- Tab 3: Symbology Legend -->
     <div id="tab-legend" class="panel-body tab-page" role="tabpanel" style="display: none;">
       <section class="surface-card" style="padding: 12px;">
         <div class="layer-title-text" style="margin-bottom: 8px;">
@@ -189,7 +249,7 @@
       </div>
     </div>
 
-    <!-- Tab 3: Service Metadata Details -->
+    <!-- Tab 4: Service Metadata Details -->
     <div id="tab-details" class="panel-body tab-page" role="tabpanel" style="display: none;">
       <section class="surface-card">
         <div class="layer-title-text">Integrated Services</div>
@@ -234,6 +294,7 @@
 
   <!-- Modular Scripts Architecture -->
   <script src="js/config.js"></script>
+  <script src="js/filter.js"></script>
   <script src="js/layers.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/app.js"></script>
